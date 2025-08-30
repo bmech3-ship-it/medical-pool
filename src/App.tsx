@@ -1,5 +1,30 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { useLocalStorage } from "./hooks/useLocalStorage";
+
+/** Persistent state hook (localStorage) — replaces usePersistentState */
+function usePersistentState<T>(key: string, initial: T): [T, React.Dispatch<React.SetStateAction<T>>] {
+  const [state, setState] = useState<T>(() => {
+    try {
+      const raw = localStorage.getItem(key);
+      return raw != null ? JSON.parse(raw) as T : initial;
+    } catch {
+      return initial;
+    }
+  });
+  useEffect(() => {
+    try { localStorage.setItem(key, JSON.stringify(state)); } catch {}
+  }, [key, state]);
+  useEffect(() => {
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === key) {
+        try { setState(e.newValue != null ? JSON.parse(e.newValue) as T : initial); } catch {}
+      }
+    };
+    window.addEventListener('storage', onStorage);
+    return () => window.removeEventListener('storage', onStorage);
+  }, [key]);
+  return [state, setState];
+}
+
 import {
   LayoutDashboard,
   Archive,
@@ -144,27 +169,18 @@ export default function App() {
   const [tab, setTab] = useState<'dashboard' | 'assets' | 'borrow' | 'return' | 'report' | 'settings'>('dashboard');
 
   // master data (persist)
-  const [brands, setBrands] = useLocalStorage<string[]>("mp:brands", ["Philips", "GE"]);
-  const [models, setModels] = useLocalStorage<{ brand: string; name: string; }[]>("mp:models", [
-    { brand: "Philips", name: "IntelliVue" },
-    { brand: "GE",      name: "Carescape"  },
-  ]);
-  const [vendors, setVendors] = useLocalStorage<string[]>("mp:vendors", ["MedSupply Co."]);
-  const [depts, setDepts]     = useLocalStorage<string[]>("mp:depts",   ["ER", "ICU", "OR", "WARD"]);
+  const [brands, setBrands] = usePersistentState<string[]>("mp:brands", []);
+  const [models, setModels] = usePersistentState<{ brand: string; name: string; }[]>("mp:models", []);
+  const [vendors, setVendors] = usePersistentState<string[]>("mp:vendors", []);
+  const [depts, setDepts]     = usePersistentState<string[]>("mp:depts",   []);
 
   // assets & borrows (persist)
-  const [assets, setAssets] = useLocalStorage<any[]>("mp:assets", [
-    { asset_id: "MP-0001", id_code: "ID-001", name: "Patient Monitor", brand: "Philips", model: "IntelliVue", vendor: "MedSupply Co.", serial: "SN123", purchase_date: "2023-06-01", price: 150000 },
-    { asset_id: "MP-0002", id_code: "ID-002", name: "Infusion Pump",   brand: "GE",      model: "Carescape",  vendor: "MedSupply Co.", serial: "SN124", purchase_date: "2024-01-15", price: 85000 },
-  ]);
-  const [borrows, setBorrows] = useLocalStorage<any[]>("mp:borrows", [
-    { id: uid(), asset_id: "MP-0001", asset_name: "Patient Monitor", borrower_name: "สมชาย",    borrower_dept: "ER",   lender_name: "นพ.เอ", peripherals: "", start_date: addDays(todayStr(), -17), end_date: "", returned_at: null, borrower_sign: null, created_at: new Date().toISOString() },
-    { id: uid(), asset_id: "MP-0002", asset_name: "Infusion Pump",   borrower_name: "สุดารัตน์", borrower_dept: "WARD", lender_name: "นพ.บี", peripherals: "", start_date: addDays(todayStr(),  -3), end_date: "", returned_at: null, borrower_sign: null, created_at: new Date().toISOString() },
-  ]);
+  const [assets, setAssets] = usePersistentState<any[]>("mp:assets", []);
+  const [borrows, setBorrows] = usePersistentState<any[]>("mp:borrows", []);
 
   // settings (persist)
-  const [orgName, setOrgName]       = useLocalStorage<string>("mp:org_name", "Hospital Name");
-  const [reportLogo, setReportLogo] = useLocalStorage<string>("mp:report_logo", "");
+  const [orgName, setOrgName]       = usePersistentState<string>("mp:org_name", "Hospital Name");
+  const [reportLogo, setReportLogo] = usePersistentState<string>("mp:report_logo", "");
 
   const active = useMemo(() => borrows.filter(b => !b.returned_at), [borrows]);
   const activeIds = useMemo(() => active.map(b => b.asset_id), [active]);
@@ -855,64 +871,27 @@ function ActiveLoans({ borrows, compact }: { borrows: any[]; compact?: boolean; 
   );
 }
 
-/********** settings (Org Name + Logo + Supabase keys) **********/
+
+/********** settings (Org Name + Logo only; Supabase removed) **********/
 function Settings({ orgName, setOrgName, reportLogo, setReportLogo }: { orgName: string; setOrgName: (v: string)=>void; reportLogo: string; setReportLogo: (v: string)=>void; }) {
-  const [supabaseUrl, setSupabaseUrl] = useState<string>(() => localStorage.getItem("sb_url") || "");
-  const [supabaseAnon, setSupabaseAnon] = useState<string>(() => localStorage.getItem("sb_anon") || "");
-  const [sbStatus, setSbStatus] = useState<string>("");
-
-  const saveSupabase = () => { localStorage.setItem("sb_url", supabaseUrl.trim()); localStorage.setItem("sb_anon", supabaseAnon.trim()); alert("บันทึกค่า Supabase แล้ว"); };
-  const testSupabase = async () => {
-    setSbStatus("กำลังทดสอบ...");
-    try {
-      const base = supabaseUrl.replace(/\/$/, "");
-      const res = await fetch(base + "/auth/v1/settings", { headers: { apikey: supabaseAnon } });
-      setSbStatus(res.ok ? "เชื่อมต่อได้ ✅" : `เชื่อมต่อไม่ได้ (${res.status})`);
-    } catch (e: any) {
-      setSbStatus("เชื่อมต่อไม่ได้ ❌: " + (e?.message || "Unknown error"));
-    }
-  };
-
-  // ไม่ต้องมี useEffect ที่ set localStorage อีก เพราะ parent persist แล้ว
-
   return (
     <Card>
-      <div className="flex items-center gap-2 mb-3"><SettingsIcon size={18} className="text-blue-600"/><h3 className="font-semibold">Settings</h3></div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-6">
-        <label className="block">
-          <span className="text-sm block mb-1">ชื่อหน่วยงาน (ใช้เป็นหัวรายงาน)</span>
-          <input className="w-full px-3 py-2 border rounded-xl" value={orgName} onChange={(e)=>setOrgName(e.target.value)} />
-        </label>
-        <label className="block">
-          <span className="text-sm block mb-1">โลโก้ (URL หรือ data:image/...)</span>
-          <input className="w-full px-3 py-2 border rounded-xl" value={reportLogo} onChange={(e)=>setReportLogo(e.target.value)} placeholder="https://.../logo.png" />
-        </label>
-      </div>
-
-      <div className="mt-4">
-        <div className="font-medium mb-2">Supabase</div>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          <label className="block">
-            <span className="text-sm block mb-1">SUPABASE_URL</span>
-            <input className="w-full px-3 py-2 border rounded-xl" value={supabaseUrl} onChange={(e) => setSupabaseUrl(e.target.value)} placeholder="https://xxxx.supabase.co" />
-          </label>
-          <label className="block">
-            <span className="text-sm block mb-1">SUPABASE_ANON_KEY</span>
-            <input className="w-full px-3 py-2 border rounded-xl" value={supabaseAnon} onChange={(e) => setSupabaseAnon(e.target.value)} placeholder="eyJhbGciOi..." />
-          </label>
+      <div className="flex items-center gap-2 mb-3"><SettingsIcon className="text-blue-600"/><h3 className="font-semibold">Settings</h3></div>
+      <div className="space-y-6">
+        <div>
+          <label className="block text-sm font-medium mb-1">ชื่อหน่วยงาน/โรงพยาบาล</label>
+          <input className="border rounded px-3 py-2 w-full" value={orgName} onChange={e => setOrgName(e.target.value)} placeholder="เช่น แผนกเครื่องมือแพทย์ โรงพยาบาล..." />
         </div>
-        <div className="flex gap-2 mt-3">
-          <Button variant="ghost" onClick={saveSupabase}>บันทึก</Button>
-          <Button variant="success" onClick={testSupabase}>ทดสอบการเชื่อมต่อ</Button>
+        <div>
+          <label className="block text-sm font-medium mb-1">โลโก้สำหรับรายงาน (URL หรือ Base64 Data URL)</label>
+          <input className="border rounded px-3 py-2 w-full" value={reportLogo} onChange={e => setReportLogo(e.target.value)} placeholder="วาง URL หรือ data:image/png;base64,..." />
+          <p className="text-xs text-slate-500 mt-1">ถ้าว่าง ระบบจะพิมพ์รายงานโดยไม่ใส่โลโก้</p>
+          {!!reportLogo && <div className="mt-3"><img src={reportLogo} alt="logo preview" className="h-16"/></div>}
         </div>
-        {sbStatus && <div className="mt-2 text-sm">สถานะ: {sbStatus}</div>}
-        <div className="text-xs text-slate-500 mt-2">* หมายเหตุ: การฝังรูปลง Excel ต้องใช้ปลั๊กอินเชิงพาณิชย์ของ SheetJS; เวอร์ชันนี้ใส่หัวกระดาษเป็นข้อความแทน</div>
       </div>
     </Card>
   );
 }
-
 /********** lightweight tests (console) **********/
 try {
   console.assert(daysBetween("2024-01-01", "2024-01-02") === 1, "daysBetween should be 1 day");
