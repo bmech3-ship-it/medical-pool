@@ -957,4 +957,3 @@ try {
   console.assert(daysBetween("2024-01-10", "2024-01-01") === -9 || daysBetween("2024-01-10", "2024-01-01") <= 0, "daysBetween handles reverse order");
   console.log("UI sanity tests passed");
 } catch (e) { console.warn("Sanity test failed", e); }
-
