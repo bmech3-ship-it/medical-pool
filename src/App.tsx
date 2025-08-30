@@ -873,54 +873,43 @@ function ActiveLoans({ borrows, compact }: { borrows: any[]; compact?: boolean; 
   );
 }
 
-/********** settings (Org Name + Logo + Supabase keys) **********/
-function Settings({ orgName, setOrgName, reportLogo, setReportLogo }: { orgName: string; setOrgName: (v: string)=>void; reportLogo: string; setReportLogo: (v: string)=>void; }) {
-  const [sbStatus, setSbStatus] = useState<string>("");
 
-  const testSupabase = async () => {
-    setSbStatus("กำลังทดสอบ...");
+/********** settings (Org Name + Logo + Reset) **********/
+function Settings({ orgName, setOrgName, reportLogo, setReportLogo }: { orgName: string; setOrgName: (v: string)=>void; reportLogo: string; setReportLogo: (v: string)=>void; }) {
+  const onResetAll = () => {
     try {
-      const base = supabaseUrl.replace(/\/$/, "");
-      const res = await fetch(base + "/auth/v1/settings", { headers: { apikey: supabaseAnon } });
-      setSbStatus(res.ok ? "เชื่อมต่อได้ ✅" : `เชื่อมต่อไม่ได้ (${res.status})`);
-    } catch (e: any) {
-      setSbStatus("เชื่อมต่อไม่ได้ ❌: " + (e?.message || "Unknown error"));
+      Object.keys(localStorage).filter(k => k.startsWith("mp:")).forEach(k => localStorage.removeItem(k));
+      alert("ล้างข้อมูลทั้งหมดแล้ว ระบบจะรีเฟรชหน้าให้อัตโนมัติ");
+      window.location.reload();
+    } catch (e) {
+      console.error("Reset error", e);
+      alert("ล้างข้อมูลไม่สำเร็จ (ดูคอนโซลเพิ่มเติม)");
     }
   };
 
-  // ไม่ต้องมี useEffect ที่ set localStorage อีก เพราะ parent persist แล้ว
-
   return (
-    <Card>
-      <div className="flex items-center gap-2 mb-3"><SettingsIcon size={18} className="text-blue-600"/><h3 className="font-semibold">Settings</h3></div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-6">
-        <label className="block">
-          <span className="text-sm block mb-1">ชื่อหน่วยงาน (ใช้เป็นหัวรายงาน)</span>
+    <Card className="p-4">
+      <div className="flex items-center gap-2 mb-3">
+        <SettingsIcon className="text-blue-600"/><h3 className="font-semibold">Settings</h3>
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <label className="text-sm text-slate-600">ชื่อหน่วยงาน</label>
           <input className="w-full px-3 py-2 border rounded-xl" value={orgName} onChange={(e)=>setOrgName(e.target.value)} />
-        </label>
-        <label className="block">
-          <span className="text-sm block mb-1">โลโก้ (URL หรือ data:image/...)</span>
+        </div>
+        <div>
+          <label className="text-sm text-slate-600">โลโก้รายงาน (URL)</label>
           <input className="w-full px-3 py-2 border rounded-xl" value={reportLogo} onChange={(e)=>setReportLogo(e.target.value)} placeholder="https://.../logo.png" />
-        </label>
+        </div>
       </div>
 
-      <div className="mt-4">
-        <div className="font-medium mb-2">Supabase</div>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          <label className="block">
-            <input className="w-full px-3 py-2 border rounded-xl" value={supabaseUrl} onChange={(e) => setSupabaseUrl(e.target.value)} placeholder="https://xxxx.supabase.co" />
-          </label>
-          <label className="block">
-            <input className="w-full px-3 py-2 border rounded-xl" value={supabaseAnon} onChange={(e) => setSupabaseAnon(e.target.value)} placeholder="eyJhbGciOi..." />
-          </label>
+      <div className="mt-6 flex items-center justify-between">
+        <div className="text-sm text-slate-500">
+          เก็บข้อมูลแบบออฟไลน์ในเบราว์เซอร์ (localStorage) — ไม่หายเมื่อรีเฟรช/ปิดเปิดใหม่
         </div>
-        <div className="flex gap-2 mt-3">
-          <Button variant="ghost" onClick={saveSupabase}>บันทึก</Button>
-          <Button variant="success" onClick={testSupabase}>ทดสอบการเชื่อมต่อ</Button>
+        <div className="flex gap-2">
+          <Button variant="danger" onClick={onResetAll}>ล้างข้อมูลทั้งหมด</Button>
         </div>
-        {sbStatus && <div className="mt-2 text-sm">สถานะ: {sbStatus}</div>}
-        <div className="text-xs text-slate-500 mt-2">* หมายเหตุ: การฝังรูปลง Excel ต้องใช้ปลั๊กอินเชิงพาณิชย์ของ SheetJS; เวอร์ชันนี้ใส่หัวกระดาษเป็นข้อความแทน</div>
       </div>
     </Card>
   );
