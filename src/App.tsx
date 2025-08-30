@@ -1,6 +1,23 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import {
+  LayoutDashboard,
+  Archive,
+  HandPlatter,
+  Undo2,
+  FileBarChart2,
+  Settings as SettingsIcon,
+  CheckCircle2,
+  AlertTriangle,
+  Factory,
+  Building2,
+  PencilLine,
+  Trash2,
+  Download,
+  Printer,
+  QrCode,
+} from "lucide-react";
 
-// --- Local, robust useLocalStorage hook (persists safely, no auto-reset) ---
+/** Local, robust useLocalStorage hook (persists safely, no auto-reset) */
 function useLocalStorage<T>(key: string, initialValue: T) {
   const [value, setValue] = React.useState<T>(() => {
     try {
@@ -27,31 +44,90 @@ function useLocalStorage<T>(key: string, initialValue: T) {
   return [value, setValue] as const;
 }
 
-import {
-  LayoutDashboard,
-  Archive,
-  HandPlatter,
-  Undo2,
-  FileBarChart2,
-  Settings as SettingsIcon,
-  CheckCircle2,
-  AlertTriangle,
-  Factory,
-  Building2,
-  PencilLine,
-  Trash2,
-  Download,
-  Printer,
-  QrCode,
-} from "lucide-react";
+/********** tiny UI helpers **********/
+const Card = ({ className = "", children }: { className?: string; children: React.ReactNode }) => (
+  <div className={"bg-white/90 backdrop-blur border rounded-2xl p-4 shadow-sm " + className}>{children}</div>
+);
+const Badge = ({ tone = "slate", children }: { tone?: "slate" | "green" | "red" | "blue"; children: React.ReactNode }) => {
+  const map: any = {
+    slate: "bg-slate-100 text-slate-700 border-slate-200",
+    green: "bg-emerald-50 text-emerald-700 border-emerald-200",
+    red: "bg-red-50 text-red-700 border-red-200",
+    blue: "bg-blue-50 text-blue-700 border-blue-200",
+  };
+  return <span className={"inline-flex items-center px-2.5 py-1 rounded-full text-xs border " + map[tone]}>{children}</span>;
+};
+const Button = ({ variant = "default", size = "md", className = "", ...rest }: any) => {
+  const variantMap: any = {
+    default: "bg-blue-600 text-white hover:bg-blue-700",
+    ghost: "border hover:bg-slate-50",
+    danger: "bg-red-600 text-white hover:bg-red-700",
+    success: "bg-emerald-600 text-white hover:bg-emerald-700",
+    secondary: "bg-slate-700 text-white hover:bg-slate-800",
+  };
+  const sizeMap: any = { sm: "px-3 py-1.5 rounded-lg text-sm", md: "px-4 py-2 rounded-xl", lg: "px-5 py-3 rounded-2xl text-base" };
+  return <button className={[variantMap[variant], sizeMap[size], "inline-flex items-center gap-2", className].join(" ")} {...rest} />;
+};
 
-/*************************************************
- * Medical Pool – Polished UI (Tailwind-only)
- * - Visual refresh: gradient header, icon tabs, cards, badges
- * - Tables with sticky headers, zebra rows, hover states
- * - Buttons with consistent sizes & icons
- * - No logic changes (only UI/UX polish)
- *************************************************/
+/** composition-safe Text input (for labeled fields) */
+const Text = ({
+  label, value, onChange, type = "text", placeholder, required,
+}: { label: string; value: any; onChange?: (v: string) => void; type?: string; placeholder?: string; required?: boolean; }) => {
+  const [local, setLocal] = useState<string>("");
+  const composing = useRef(false);
+
+  useEffect(() => {
+    if (!composing.current) setLocal((value ?? "").toString());
+  }, [value]);
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const v = e.target.value;
+    setLocal(v);
+    if (!composing.current) onChange && onChange(v);
+  };
+
+  return (
+    <label className="block">
+      <span className="block text-sm font-medium mb-1 text-slate-700">
+        {label}{required ? " *" : ""}
+      </span>
+      <input
+        type={type}
+        value={local}
+        onChange={handleChange}
+        onCompositionStart={() => { composing.current = true; }}
+        onCompositionEnd={(e) => {
+          composing.current = false;
+          const v = (e.target as HTMLInputElement).value;
+          setLocal(v);
+          onChange && onChange(v);
+        }}
+        placeholder={placeholder}
+        required={required}
+        className="w-full px-3 py-2.5 border rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-200 bg-white"
+      />
+    </label>
+  );
+};
+
+/** composition-safe compact input (for table cells / inline edit) */
+const CInput = ({
+  value, onChange, type = "text", className = "",
+}: { value: any; onChange?: (v: string)=>void; type?: string; className?: string; }) => {
+  const [local, setLocal] = useState<string>("");
+  const composing = useRef(false);
+  useEffect(()=>{ if(!composing.current) setLocal((value ?? "").toString()); }, [value]);
+  return (
+    <input
+      type={type}
+      value={local}
+      onChange={(e)=>{ const v=e.target.value; setLocal(v); if(!composing.current) onChange && onChange(v); }}
+      onCompositionStart={()=>{composing.current=true;}}
+      onCompositionEnd={(e)=>{ composing.current=false; const v=(e.target as HTMLInputElement).value; setLocal(v); onChange && onChange(v);}}
+      className={"px-2 py-1 border rounded " + className}
+    />
+  );
+};
 
 /********** utils **********/
 const uid = (): string => Math.random().toString(36).slice(2) + Date.now().toString(36);
@@ -86,75 +162,6 @@ async function loadXLSX(): Promise<any> {
   });
   return (window as any).XLSX;
 }
-
-/********** tiny UI helpers **********/
-const Card = ({ className = "", children }: { className?: string; children: React.ReactNode }) => (
-  <div className={"bg-white/90 backdrop-blur border rounded-2xl p-4 shadow-sm " + className}>{children}</div>
-);
-const Badge = ({ tone = "slate", children }: { tone?: "slate" | "green" | "red" | "blue"; children: React.ReactNode }) => {
-  const map: any = {
-    slate: "bg-slate-100 text-slate-700 border-slate-200",
-    green: "bg-emerald-50 text-emerald-700 border-emerald-200",
-    red: "bg-red-50 text-red-700 border-red-200",
-    blue: "bg-blue-50 text-blue-700 border-blue-200",
-  };
-  return <span className={"inline-flex items-center px-2.5 py-1 rounded-full text-xs border " + map[tone]}>{children}</span>;
-};
-const Button = ({ variant = "default", size = "md", className = "", ...rest }: any) => {
-  const variantMap: any = {
-    default: "bg-blue-600 text-white hover:bg-blue-700",
-    ghost: "border hover:bg-slate-50",
-    danger: "bg-red-600 text-white hover:bg-red-700",
-    success: "bg-emerald-600 text-white hover:bg-emerald-700",
-    secondary: "bg-slate-700 text-white hover:bg-slate-800",
-  };
-  const sizeMap: any = { sm: "px-3 py-1.5 rounded-lg text-sm", md: "px-4 py-2 rounded-xl", lg: "px-5 py-3 rounded-2xl text-base" };
-  return <button className={[variantMap[variant], sizeMap[size], "inline-flex items-center gap-2", className].join(" ")} {...rest} />;
-};
-
-const Text = ({
-  label, value, onChange, type = "text", placeholder, required,
-}: { label: string; value: any; onChange?: (v: string) => void; type?: string; placeholder?: string; required?: boolean; }) => {
-  const [local, setLocal] = useState<string>("");
-  const composing = useRef(false);
-
-  useEffect(() => {
-    // keep local in sync when not composing
-    if (!composing.current) setLocal((value ?? "").toString());
-  }, [value]);
-
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const v = e.target.value;
-    setLocal(v);
-    if (!composing.current) onChange && onChange(v);
-  };
-
-  const handleCompositionStart = () => { composing.current = true; };
-  const handleCompositionEnd = (e: React.CompositionEvent<HTMLInputElement>) => {
-    composing.current = false;
-    const v = (e.target as HTMLInputElement).value;
-    setLocal(v);
-    onChange && onChange(v);
-  };
-
-  return (
-    <label className="block">
-      <span className="block text-sm font-medium mb-1 text-slate-700">
-        {label}{required ? " *" : ""}
-      </span>
-      <input
-        type={type}
-        value={local}
-        onChange={handleChange}
-        onCompositionStart={handleCompositionStart}
-        onCompositionEnd={handleCompositionEnd}
-        placeholder={placeholder}
-        required={required}
-        className="w-full px-3 py-2.5 border rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-200 bg-white"
-      />
-    </label>
-  );
-};
 
 /********** signature **********/
 function SignaturePad({ value, onChange, height = 120 }: { value?: string | null; onChange?: (v: string | null) => void; height?: number; }) {
@@ -372,7 +379,6 @@ function Assets({ brands, setBrands, models, setModels, vendors, setVendors, ass
     setEditingId(null); setEditForm({});
   };
 
-  // simple field blocks
   const Block = ({ children }: any) => <div className="grid grid-cols-1 md:grid-cols-2 gap-3">{children}</div>;
 
   const BrandField = ({ isEdit }: { isEdit?: boolean }) => (
@@ -503,9 +509,9 @@ function AssetRow({ a, brands, models, vendors, editingIdState, editFormState, o
 
   return editingId === a.asset_id ? (
     <>
-      <td className="px-3 py-2 border-b"><input className="px-2 py-1 border rounded w-40" value={editForm.asset_id} onChange={e => setEditForm((p: any) => ({ ...p, asset_id: e.target.value }))} /></td>
-      <td className="px-3 py-2 border-b"><input className="px-2 py-1 border rounded w-32" value={editForm.id_code} onChange={e => setEditForm((p: any) => ({ ...p, id_code: e.target.value }))} /></td>
-      <td className="px-3 py-2 border-b"><input className="px-2 py-1 border rounded w-48" value={editForm.name} onChange={e => setEditForm((p: any) => ({ ...p, name: e.target.value }))} /></td>
+      <td className="px-3 py-2 border-b"><CInput className="w-40" value={editForm.asset_id} onChange={(v)=>setEditForm((p:any)=>({...p, asset_id:v}))}/></td>
+      <td className="px-3 py-2 border-b"><CInput className="w-32" value={editForm.id_code} onChange={(v)=>setEditForm((p:any)=>({...p, id_code:v}))}/></td>
+      <td className="px-3 py-2 border-b"><CInput className="w-48" value={editForm.name} onChange={(v)=>setEditForm((p:any)=>({...p, name:v}))}/></td>
       <td className="px-3 py-2 border-b w-64">
         <label className="block mb-1">
           <span className="block text-xs text-slate-600">ยี่ห้อ</span>
@@ -522,13 +528,13 @@ function AssetRow({ a, brands, models, vendors, editingIdState, editFormState, o
           </select>
         </label>
       </td>
-      <td className="px-3 py-2 border-b"><input className="px-2 py-1 border rounded w-40" value={editForm.serial} onChange={e => setEditForm((p: any) => ({ ...p, serial: e.target.value }))} /></td>
-      <td className="px-3 py-2 border-b"><input type="date" className="px-2 py-1 border rounded" value={editForm.purchase_date||""} onChange={e => setEditForm((p: any) => ({ ...p, purchase_date: e.target.value }))} /></td>
-      <td className="px-3 py-2 border-b"><input type="number" className="px-2 py-1 border rounded w-28" value={editForm.price??""} onChange={e => setEditForm((p: any) => ({ ...p, price: e.target.value }))} /></td>
+      <td className="px-3 py-2 border-b"><CInput className="w-40" value={editForm.serial} onChange={(v)=>setEditForm((p:any)=>({...p, serial:v}))}/></td>
+      <td className="px-3 py-2 border-b"><CInput type="date" value={editForm.purchase_date||""} onChange={(v)=>setEditForm((p:any)=>({...p, purchase_date:v}))}/></td>
+      <td className="px-3 py-2 border-b"><CInput type="number" className="w-28" value={editForm.price??""} onChange={(v)=>setEditForm((p:any)=>({...p, price:v}))}/></td>
       <td className="px-3 py-2 border-b">
         <label className="block">
           <span className="block text-xs text-slate-600">บริษัทผู้ขาย</span>
-          <input className="px-2 py-1 border rounded w-40" value={editForm.vendor||""} onChange={(e)=>setEditForm((p:any)=>({...p, vendor:e.target.value}))}/>
+          <CInput className="w-40" value={editForm.vendor||""} onChange={(v)=>setEditForm((p:any)=>({...p, vendor:v}))}/>
         </label>
       </td>
       <td className="px-3 py-2 border-b text-right space-x-2">
@@ -591,7 +597,7 @@ function Borrow({ assets, depts, setDepts, onCreateBorrow, activeIds = [] }: any
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
       <Card>
         <div className="flex items-center gap-2 mb-3"><HandPlatter size={18} className="text-blue-600"/><h3 className="font-semibold">ค้นหาเครื่องด้วย Asset ID</h3></div>
-        <input className="w-full px-3 py-2 border rounded-xl" placeholder="เช่น MP-0001" value={assetId} onChange={(e) => setAssetId(e.target.value)} />
+        <CInput className="w-full" value={assetId} onChange={setAssetId} />
         {asset ? (
           <div className="mt-3 text-sm">
             <div className="font-medium">{asset.name}</div>
@@ -623,7 +629,7 @@ function Borrow({ assets, depts, setDepts, onCreateBorrow, activeIds = [] }: any
             </div>
             {addingDept && (
               <div className="mt-2 flex gap-2">
-                <input className="px-3 py-2 border rounded-xl flex-1" placeholder="พิมพ์ชื่อแผนกใหม่" value={newDept} onChange={(e) => setNewDept(e.target.value)} />
+                <CInput className="flex-1" value={newDept} onChange={setNewDept} />
                 <Button variant="success" size="sm" onClick={confirmAddDept}>บันทึก</Button>
                 <Button variant="ghost" size="sm" onClick={() => { setAddingDept(false); setNewDept(""); }}>ยกเลิก</Button>
               </div>
@@ -660,8 +666,8 @@ function Return({ borrows, onReturn, onUpdateBorrow }: any) {
 
   return (
     <Card>
-      <div className="flex items中心 gap-2 mb-3"><Undo2 size={18} className="text-blue-600"/><h3 className="font-semibold">บันทึกการคืน</h3></div>
-      <input className="w-full md:w-80 px-3 py-2 border rounded-xl mb-3" placeholder="ค้นหา Asset ID / ชื่อเครื่อง / ผู้ยืม" value={kw} onChange={(e) => setKw(e.target.value)} />
+      <div className="flex items-center gap-2 mb-3"><Undo2 size={18} className="text-blue-600"/><h3 className="font-semibold">บันทึกการคืน</h3></div>
+      <CInput className="w-full md:w-80 mb-3" value={kw} onChange={setKw} />
       <div className="overflow-auto max-h-[28rem] border rounded-xl">
         <table className="min-w-full text-sm">
           <thead className="bg-slate-50 sticky top-0"><tr>{["Asset ID", "ชื่อเครื่อง", "ผู้ยืม", "เริ่มยืม", "วันสะสม", "#"].map(h => <th key={h} className="text-left px-3 py-2 border-b">{h}</th>)}</tr></thead>
@@ -673,11 +679,11 @@ function Return({ borrows, onReturn, onUpdateBorrow }: any) {
                 <td className="px-3 py-2 border-b">
                   {editId===r.id ? (
                     <div className="grid grid-cols-1 gap-1">
-                      <input className="px-2 py-1 border rounded" value={edit.borrower_name} onChange={e=>setEdit((p:any)=>({...p, borrower_name:e.target.value}))} />
-                      <input className="px-2 py-1 border rounded" placeholder="แผนก" value={edit.borrower_dept} onChange={e=>setEdit((p:any)=>({...p, borrower_dept:e.target.value}))} />
-                      <input className="px-2 py-1 border rounded" placeholder="ผู้ให้ยืม" value={edit.lender_name} onChange={e=>setEdit((p:any)=>({...p, lender_name:e.target.value}))} />
-                      <input className="px-2 py-1 border rounded" placeholder="อุปกรณ์ต่อพ่วง" value={edit.peripherals} onChange={e=>setEdit((p:any)=>({...p, peripherals:e.target.value}))} />
-                      <input type="date" className="px-2 py-1 border rounded" value={edit.end_date} onChange={e=>setEdit((p:any)=>({...p, end_date:e.target.value}))} />
+                      <CInput value={edit.borrower_name} onChange={(v)=>setEdit((p:any)=>({...p, borrower_name:v}))} />
+                      <CInput value={edit.borrower_dept} onChange={(v)=>setEdit((p:any)=>({...p, borrower_dept:v}))} />
+                      <CInput value={edit.lender_name} onChange={(v)=>setEdit((p:any)=>({...p, lender_name:v}))} />
+                      <CInput value={edit.peripherals} onChange={(v)=>setEdit((p:any)=>({...p, peripherals:v}))} />
+                      <CInput type="date" value={edit.end_date} onChange={(v)=>setEdit((p:any)=>({...p, end_date:v}))} />
                       <div className="space-x-2 mt-1">
                         <Button variant="success" size="sm" onClick={()=>save(r.id)}><CheckCircle2 size={16}/>บันทึก</Button>
                         <Button variant="ghost" size="sm" onClick={cancel}>ยกเลิก</Button>
@@ -686,7 +692,6 @@ function Return({ borrows, onReturn, onUpdateBorrow }: any) {
                   ) : (
                     <>
                       <div className="flex items-center gap-2">{r.borrower_name} {daysBetween(r.start_date) >= 14 && <Badge tone="red">นาน</Badge>}</div>
-                      <div className="text-xs text-slate-500">{r.borrower_dept || "-"}</div>
                     </>
                   )}
                 </td>
@@ -899,7 +904,6 @@ function ActiveLoans({ borrows, compact }: { borrows: any[]; compact?: boolean; 
     </div>
   );
 }
-
 
 /********** settings (Org Name + Logo + Reset) **********/
 function Settings({ orgName, setOrgName, reportLogo, setReportLogo }: { orgName: string; setOrgName: (v: string)=>void; reportLogo: string; setReportLogo: (v: string)=>void; }) {
