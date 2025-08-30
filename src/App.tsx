@@ -111,23 +111,50 @@ const Button = ({ variant = "default", size = "md", className = "", ...rest }: a
   const sizeMap: any = { sm: "px-3 py-1.5 rounded-lg text-sm", md: "px-4 py-2 rounded-xl", lg: "px-5 py-3 rounded-2xl text-base" };
   return <button className={[variantMap[variant], sizeMap[size], "inline-flex items-center gap-2", className].join(" ")} {...rest} />;
 };
+
 const Text = ({
   label, value, onChange, type = "text", placeholder, required,
-}: { label: string; value: any; onChange?: (v: string) => void; type?: string; placeholder?: string; required?: boolean; }) => (
-  <label className="block">
-    <span className="block text-sm font-medium mb-1 text-slate-700">
-      {label}{required ? " *" : ""}
-    </span>
-    <input
-      type={type}
-      value={value}
-      onChange={(e) => onChange && onChange(e.target.value)}
-      placeholder={placeholder}
-      required={required}
-      className="w-full px-3 py-2.5 border rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-200 bg-white"
-    />
-  </label>
-);
+}: { label: string; value: any; onChange?: (v: string) => void; type?: string; placeholder?: string; required?: boolean; }) => {
+  const [local, setLocal] = useState<string>("");
+  const composing = useRef(false);
+
+  useEffect(() => {
+    // keep local in sync when not composing
+    if (!composing.current) setLocal((value ?? "").toString());
+  }, [value]);
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const v = e.target.value;
+    setLocal(v);
+    if (!composing.current) onChange && onChange(v);
+  };
+
+  const handleCompositionStart = () => { composing.current = true; };
+  const handleCompositionEnd = (e: React.CompositionEvent<HTMLInputElement>) => {
+    composing.current = false;
+    const v = (e.target as HTMLInputElement).value;
+    setLocal(v);
+    onChange && onChange(v);
+  };
+
+  return (
+    <label className="block">
+      <span className="block text-sm font-medium mb-1 text-slate-700">
+        {label}{required ? " *" : ""}
+      </span>
+      <input
+        type={type}
+        value={local}
+        onChange={handleChange}
+        onCompositionStart={handleCompositionStart}
+        onCompositionEnd={handleCompositionEnd}
+        placeholder={placeholder}
+        required={required}
+        className="w-full px-3 py-2.5 border rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-200 bg-white"
+      />
+    </label>
+  );
+};
 
 /********** signature **********/
 function SignaturePad({ value, onChange, height = 120 }: { value?: string | null; onChange?: (v: string | null) => void; height?: number; }) {
