@@ -1,0 +1,1 @@
+os.makedirs("/mnt/data/src/hooks", exist_ok=True)
