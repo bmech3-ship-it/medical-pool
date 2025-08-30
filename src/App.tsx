@@ -1,28 +1,30 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 
-/** Persistent state hook (localStorage) — replaces usePersistentState */
-function usePersistentState<T>(key: string, initial: T): [T, React.Dispatch<React.SetStateAction<T>>] {
-  const [state, setState] = useState<T>(() => {
+// --- Local, robust useLocalStorage hook (persists safely, no auto-reset) ---
+function useLocalStorage<T>(key: string, initialValue: T) {
+  const [value, setValue] = React.useState<T>(() => {
     try {
-      const raw = localStorage.getItem(key);
-      return raw != null ? JSON.parse(raw) as T : initial;
+      const raw = window.localStorage.getItem(key);
+      return raw !== null ? (JSON.parse(raw) as T) : initialValue;
     } catch {
-      return initial;
+      return initialValue;
     }
   });
-  useEffect(() => {
-    try { localStorage.setItem(key, JSON.stringify(state)); } catch {}
-  }, [key, state]);
-  useEffect(() => {
+  // keep in sync across tabs
+  React.useEffect(() => {
     const onStorage = (e: StorageEvent) => {
-      if (e.key === key) {
-        try { setState(e.newValue != null ? JSON.parse(e.newValue) as T : initial); } catch {}
+      if (e.key === key && e.newValue !== null) {
+        try { setValue(JSON.parse(e.newValue!)); } catch {}
       }
     };
     window.addEventListener('storage', onStorage);
     return () => window.removeEventListener('storage', onStorage);
   }, [key]);
-  return [state, setState];
+  // persist on change
+  React.useEffect(() => {
+    try { window.localStorage.setItem(key, JSON.stringify(value)); } catch {}
+  }, [key, value]);
+  return [value, setValue] as const;
 }
 
 import {
@@ -169,18 +171,18 @@ export default function App() {
   const [tab, setTab] = useState<'dashboard' | 'assets' | 'borrow' | 'return' | 'report' | 'settings'>('dashboard');
 
   // master data (persist)
-  const [brands, setBrands] = usePersistentState<string[]>("mp:brands", []);
-  const [models, setModels] = usePersistentState<{ brand: string; name: string; }[]>("mp:models", []);
-  const [vendors, setVendors] = usePersistentState<string[]>("mp:vendors", []);
-  const [depts, setDepts]     = usePersistentState<string[]>("mp:depts",   []);
+  const [brands, setBrands] = useLocalStorage<string[]>("mp:brands", []);
+  const [models, setModels] = useLocalStorage<{ brand: string; name: string; }[]>("mp:models", []);
+  const [vendors, setVendors] = useLocalStorage<string[]>("mp:vendors", []);
+  const [depts, setDepts]     = useLocalStorage<string[]>("mp:depts",   []);
 
   // assets & borrows (persist)
-  const [assets, setAssets] = usePersistentState<any[]>("mp:assets", []);
-  const [borrows, setBorrows] = usePersistentState<any[]>("mp:borrows", []);
+  const [assets, setAssets] = useLocalStorage<any[]>("mp:assets", []);
+  const [borrows, setBorrows] = useLocalStorage<any[]>("mp:borrows", []);
 
   // settings (persist)
-  const [orgName, setOrgName]       = usePersistentState<string>("mp:org_name", "Hospital Name");
-  const [reportLogo, setReportLogo] = usePersistentState<string>("mp:report_logo", "");
+  const [orgName, setOrgName]       = useLocalStorage<string>("mp:org_name", "Hospital Name");
+  const [reportLogo, setReportLogo] = useLocalStorage<string>("mp:report_logo", "");
 
   const active = useMemo(() => borrows.filter(b => !b.returned_at), [borrows]);
   const activeIds = useMemo(() => active.map(b => b.asset_id), [active]);
@@ -871,27 +873,59 @@ function ActiveLoans({ borrows, compact }: { borrows: any[]; compact?: boolean; 
   );
 }
 
-
-/********** settings (Org Name + Logo only; Supabase removed) **********/
+/********** settings (Org Name + Logo + Supabase keys) **********/
 function Settings({ orgName, setOrgName, reportLogo, setReportLogo }: { orgName: string; setOrgName: (v: string)=>void; reportLogo: string; setReportLogo: (v: string)=>void; }) {
+  const [sbStatus, setSbStatus] = useState<string>("");
+
+  const testSupabase = async () => {
+    setSbStatus("กำลังทดสอบ...");
+    try {
+      const base = supabaseUrl.replace(/\/$/, "");
+      const res = await fetch(base + "/auth/v1/settings", { headers: { apikey: supabaseAnon } });
+      setSbStatus(res.ok ? "เชื่อมต่อได้ ✅" : `เชื่อมต่อไม่ได้ (${res.status})`);
+    } catch (e: any) {
+      setSbStatus("เชื่อมต่อไม่ได้ ❌: " + (e?.message || "Unknown error"));
+    }
+  };
+
+  // ไม่ต้องมี useEffect ที่ set localStorage อีก เพราะ parent persist แล้ว
+
   return (
     <Card>
-      <div className="flex items-center gap-2 mb-3"><SettingsIcon className="text-blue-600"/><h3 className="font-semibold">Settings</h3></div>
-      <div className="space-y-6">
-        <div>
-          <label className="block text-sm font-medium mb-1">ชื่อหน่วยงาน/โรงพยาบาล</label>
-          <input className="border rounded px-3 py-2 w-full" value={orgName} onChange={e => setOrgName(e.target.value)} placeholder="เช่น แผนกเครื่องมือแพทย์ โรงพยาบาล..." />
+      <div className="flex items-center gap-2 mb-3"><SettingsIcon size={18} className="text-blue-600"/><h3 className="font-semibold">Settings</h3></div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-6">
+        <label className="block">
+          <span className="text-sm block mb-1">ชื่อหน่วยงาน (ใช้เป็นหัวรายงาน)</span>
+          <input className="w-full px-3 py-2 border rounded-xl" value={orgName} onChange={(e)=>setOrgName(e.target.value)} />
+        </label>
+        <label className="block">
+          <span className="text-sm block mb-1">โลโก้ (URL หรือ data:image/...)</span>
+          <input className="w-full px-3 py-2 border rounded-xl" value={reportLogo} onChange={(e)=>setReportLogo(e.target.value)} placeholder="https://.../logo.png" />
+        </label>
+      </div>
+
+      <div className="mt-4">
+        <div className="font-medium mb-2">Supabase</div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <label className="block">
+            <input className="w-full px-3 py-2 border rounded-xl" value={supabaseUrl} onChange={(e) => setSupabaseUrl(e.target.value)} placeholder="https://xxxx.supabase.co" />
+          </label>
+          <label className="block">
+            <input className="w-full px-3 py-2 border rounded-xl" value={supabaseAnon} onChange={(e) => setSupabaseAnon(e.target.value)} placeholder="eyJhbGciOi..." />
+          </label>
         </div>
-        <div>
-          <label className="block text-sm font-medium mb-1">โลโก้สำหรับรายงาน (URL หรือ Base64 Data URL)</label>
-          <input className="border rounded px-3 py-2 w-full" value={reportLogo} onChange={e => setReportLogo(e.target.value)} placeholder="วาง URL หรือ data:image/png;base64,..." />
-          <p className="text-xs text-slate-500 mt-1">ถ้าว่าง ระบบจะพิมพ์รายงานโดยไม่ใส่โลโก้</p>
-          {!!reportLogo && <div className="mt-3"><img src={reportLogo} alt="logo preview" className="h-16"/></div>}
+        <div className="flex gap-2 mt-3">
+          <Button variant="ghost" onClick={saveSupabase}>บันทึก</Button>
+          <Button variant="success" onClick={testSupabase}>ทดสอบการเชื่อมต่อ</Button>
         </div>
+        {sbStatus && <div className="mt-2 text-sm">สถานะ: {sbStatus}</div>}
+        <div className="text-xs text-slate-500 mt-2">* หมายเหตุ: การฝังรูปลง Excel ต้องใช้ปลั๊กอินเชิงพาณิชย์ของ SheetJS; เวอร์ชันนี้ใส่หัวกระดาษเป็นข้อความแทน</div>
       </div>
     </Card>
   );
 }
+
 /********** lightweight tests (console) **********/
 try {
   console.assert(daysBetween("2024-01-01", "2024-01-02") === 1, "daysBetween should be 1 day");
